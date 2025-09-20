@@ -1,0 +1,5 @@
+*.mp4
+*.mkv
+.venv/
+__pycache__/
+compressed_videos/

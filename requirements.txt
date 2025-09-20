@@ -1,0 +1,12 @@
+# 🎬 Ultra Cool Video Compressor Dependencies
+
+# For the full cool experience with colors, progress bars, and ASCII art:
+rich>=13.0.0
+pyfiglet>=0.8.0
+
+# The script will work without these, but with basic output only
+# Install with: pip install -r requirements.txt
+
+# External requirement:
+# FFmpeg must be installed and available in PATH
+# Download from: https://ffmpeg.org/download.html
