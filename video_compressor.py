@@ -615,7 +615,8 @@ class VideoCompressor:
                 continue
 
             # Generate output filename with quality suffix, default to .mp4
-            output_path = input_path.with_stem(f"{input_path.stem}_{quality}").with_suffix('.mp4')
+            gpu_suffix = "_gpu" if use_gpu else ""
+            output_path = input_path.with_stem(f"{input_path.stem}_{quality}{gpu_suffix}").with_suffix('.mp4')
 
             if RICH_AVAILABLE:
                 self.console.print(f"\n🎯 Processing with {quality} quality...", style="bold blue")
@@ -886,7 +887,8 @@ class VideoCompressor:
                 failed.append((str(input_path), "File not found"))
                 continue
 
-            output_path = output_dir / f"{input_path.stem}_compressed{input_path.suffix}"
+            gpu_suffix = "_gpu" if use_gpu else ""
+            output_path = output_dir / f"{input_path.stem}_compressed{gpu_suffix}{input_path.suffix}"
 
             if RICH_AVAILABLE:
                 self.console.print(f"\n📹 Processing {i}/{len(input_paths)}: {input_path.name}", style="bold blue")
@@ -1152,7 +1154,8 @@ Examples:
                 return 0 if len(failed) == 0 else 1
             else:
                 input_path = Path(input_file)
-                output_file = str(input_path.with_stem(f"{input_path.stem}_compressed").with_suffix('.mp4'))
+                gpu_suffix = "_gpu" if args.gpu else ""
+                output_file = str(input_path.with_stem(f"{input_path.stem}_compressed{gpu_suffix}").with_suffix('.mp4'))
 
                 if RICH_AVAILABLE:
                     compressor.console.print(f"📁 No output specified, using: {output_file}", style="yellow")

@@ -3,3 +3,4 @@
 .venv/
 __pycache__/
 compressed_videos/
+benchmarked_videos/
