@@ -277,6 +277,9 @@ class VideoCompressor:
 
     def compress_video(self, input_path, output_path, quality="medium", use_gpu=False):
         """Compress video with cool progress tracking and Discord optimization"""
+        import time
+        start_time = time.time()
+
         input_path = Path(input_path)
         output_path = Path(output_path)
 
@@ -364,13 +367,46 @@ class VideoCompressor:
         ])
 
         try:
-            return self._run_compression_with_progress(cmd, input_path, output_path, video_info)
+            result = self._run_compression_with_progress(cmd, input_path, output_path, video_info)
+
+            # Calculate elapsed time
+            end_time = time.time()
+            elapsed_time = end_time - start_time
+
+            # If successful, show timing and return result
+            if result:
+                self._display_timing_info(elapsed_time, input_path, use_gpu)
+
+            return result
         except subprocess.TimeoutExpired:
             if RICH_AVAILABLE:
                 self.console.print("⏰ Error: Compression timed out (30 minutes)", style="bold red")
             else:
                 print("⏰ Error: Compression timed out (30 minutes)")
             return False
+
+    def _display_timing_info(self, elapsed_time, input_path, use_gpu):
+        """Display compression timing information"""
+        minutes = int(elapsed_time // 60)
+        seconds = elapsed_time % 60
+
+        encoding_type = "GPU" if use_gpu else "CPU"
+        time_str = f"{minutes}m {seconds:.1f}s" if minutes > 0 else f"{seconds:.1f}s"
+
+        if RICH_AVAILABLE:
+            timing_panel = Panel(
+                f"⏱️ Compression time: {time_str}\n"
+                f"🖥️ Encoding: {encoding_type}\n"
+                f"📁 File: {input_path.name}",
+                title="⚡ Performance",
+                border_style="green"
+            )
+            self.console.print(timing_panel)
+        else:
+            print(f"\n⚡ Performance:")
+            print(f"⏱️ Compression time: {time_str}")
+            print(f"🖥️ Encoding: {encoding_type}")
+            print(f"📁 File: {input_path.name}")
 
     def _run_compression_with_progress(self, cmd, input_path, output_path, video_info):
         """Run compression with real-time progress tracking"""
@@ -597,8 +633,242 @@ class VideoCompressor:
 
         return successful, failed
 
+    def run_benchmark(self, input_path):
+        """Run comprehensive benchmark tests on a video file"""
+        input_path = Path(input_path)
+        if not input_path.exists():
+            raise FileNotFoundError(f"Input file not found: {input_path}")
+
+        import time
+
+        if RICH_AVAILABLE:
+            self.console.print("🏁 Starting benchmark tests...", style="bold cyan")
+            self.console.print("This will test various encoding configurations to find optimal settings.", style="cyan")
+        else:
+            print("🏁 Starting benchmark tests...")
+            print("This will test various encoding configurations to find optimal settings.")
+
+        # Create benchmark directory
+        benchmark_dir = Path("benchmark_results")
+        benchmark_dir.mkdir(exist_ok=True)
+
+        benchmark_results = []
+
+        # Test configurations: (quality, use_gpu, description)
+        test_configs = [
+            ("medium", False, "CPU Medium"),
+            ("medium", True, "GPU Medium"),
+            ("high", False, "CPU High"),
+            ("high", True, "GPU High"),
+            ("low", False, "CPU Low"),
+            ("low", True, "GPU Low"),
+        ]
+
+        total_tests = len(test_configs)
+
+        for i, (quality, use_gpu, description) in enumerate(test_configs, 1):
+            if RICH_AVAILABLE:
+                self.console.print(f"\n🧪 Test {i}/{total_tests}: {description}", style="bold blue")
+            else:
+                print(f"\n🧪 Test {i}/{total_tests}: {description}")
+
+            # Generate output filename
+            output_filename = f"benchmark_{quality}_{('gpu' if use_gpu else 'cpu')}.mp4"
+            output_path = benchmark_dir / output_filename
+
+            try:
+                start_time = time.time()
+                success = self.compress_video(input_path, output_path, quality, use_gpu)
+                end_time = time.time()
+
+                if success and output_path.exists():
+                    elapsed_time = end_time - start_time
+                    output_size = output_path.stat().st_size / (1024 * 1024)  # MB
+
+                    benchmark_results.append({
+                        'description': description,
+                        'quality': quality,
+                        'gpu': use_gpu,
+                        'time': elapsed_time,
+                        'size_mb': output_size,
+                        'output_path': output_path,
+                        'success': True
+                    })
+
+                    if RICH_AVAILABLE:
+                        minutes = int(elapsed_time // 60)
+                        seconds = elapsed_time % 60
+                        time_str = f"{minutes}m {seconds:.1f}s" if minutes > 0 else f"{seconds:.1f}s"
+                        self.console.print(f"✅ Completed in {time_str} - {output_size:.1f}MB", style="green")
+                    else:
+                        print(f"✅ Completed in {elapsed_time:.1f}s - {output_size:.1f}MB")
+                else:
+                    benchmark_results.append({
+                        'description': description,
+                        'quality': quality,
+                        'gpu': use_gpu,
+                        'success': False
+                    })
+                    if RICH_AVAILABLE:
+                        self.console.print("❌ Failed", style="red")
+                    else:
+                        print("❌ Failed")
+
+            except Exception as e:
+                benchmark_results.append({
+                    'description': description,
+                    'quality': quality,
+                    'gpu': use_gpu,
+                    'success': False,
+                    'error': str(e)
+                })
+                if RICH_AVAILABLE:
+                    self.console.print(f"❌ Error: {e}", style="red")
+                else:
+                    print(f"❌ Error: {e}")
+
+        # Display benchmark results
+        self._display_benchmark_results(benchmark_results, input_path)
+
+        return benchmark_results
+
+    def _display_benchmark_results(self, results, input_path):
+        """Display comprehensive benchmark results"""
+        successful_results = [r for r in results if r.get('success', False)]
+
+        if not successful_results:
+            if RICH_AVAILABLE:
+                self.console.print("❌ No successful benchmark tests completed", style="bold red")
+            else:
+                print("❌ No successful benchmark tests completed")
+            return
+
+        if RICH_AVAILABLE:
+            # Create benchmark results table
+            table = Table(title=f"🏆 Benchmark Results for {input_path.name}", show_header=True, header_style="bold magenta")
+            table.add_column("Configuration", style="cyan", width=15)
+            table.add_column("Time", style="green", width=10)
+            table.add_column("File Size", style="yellow", width=10)
+            table.add_column("Speed vs CPU", style="blue", width=12)
+            table.add_column("Efficiency", style="purple", width=12)
+
+            # Find CPU medium baseline for comparison
+            cpu_medium_time = None
+            for result in successful_results:
+                if result['quality'] == 'medium' and not result['gpu']:
+                    cpu_medium_time = result['time']
+                    break
+
+            # Add results to table
+            for result in successful_results:
+                # Format time
+                time = result['time']
+                minutes = int(time // 60)
+                time_str = f"{minutes}m {time % 60:.1f}s" if minutes > 0 else f"{time:.1f}s"
+
+                # Calculate speed comparison
+                if cpu_medium_time and cpu_medium_time > 0:
+                    speed_multiplier = cpu_medium_time / time
+                    if speed_multiplier > 1:
+                        speed_str = f"{speed_multiplier:.1f}x faster"
+                    else:
+                        speed_str = f"{1/speed_multiplier:.1f}x slower"
+                else:
+                    speed_str = "baseline"
+
+                # Calculate efficiency (MB per second)
+                efficiency = result['size_mb'] / time
+                efficiency_str = f"{efficiency:.2f} MB/s"
+
+                table.add_row(
+                    result['description'],
+                    time_str,
+                    f"{result['size_mb']:.1f} MB",
+                    speed_str,
+                    efficiency_str
+                )
+
+            self.console.print(table)
+
+            # Performance analysis
+            self._display_benchmark_analysis(successful_results)
+
+        else:
+            # Simple text output
+            print(f"\n🏆 Benchmark Results for {input_path.name}")
+            print("="*60)
+
+            for result in successful_results:
+                time = result['time']
+                print(f"{result['description']:15} {time:6.1f}s  {result['size_mb']:6.1f}MB")
+
+            # Simple analysis
+            self._display_benchmark_analysis_simple(successful_results)
+
+    def _display_benchmark_analysis(self, results):
+        """Display detailed benchmark analysis with Rich formatting"""
+        # Find best GPU and CPU results
+        gpu_results = [r for r in results if r['gpu']]
+        cpu_results = [r for r in results if not r['gpu']]
+
+        if gpu_results and cpu_results:
+            # Find fastest GPU and CPU
+            fastest_gpu = min(gpu_results, key=lambda x: x['time'])
+            fastest_cpu = min(cpu_results, key=lambda x: x['time'])
+
+            gpu_speedup = fastest_cpu['time'] / fastest_gpu['time']
+
+            analysis_text = f"""
+💡 Analysis:
+• Fastest GPU: {fastest_gpu['description']} ({fastest_gpu['time']:.1f}s)
+• Fastest CPU: {fastest_cpu['description']} ({fastest_cpu['time']:.1f}s)
+• GPU Speedup: {gpu_speedup:.1f}x faster than CPU
+• Best quality/time ratio: {self._find_best_quality_time_ratio(results)}
+            """.strip()
+
+            analysis_panel = Panel(
+                analysis_text,
+                title="📊 Performance Analysis",
+                border_style="cyan"
+            )
+            self.console.print(analysis_panel)
+
+    def _display_benchmark_analysis_simple(self, results):
+        """Display simple benchmark analysis"""
+        gpu_results = [r for r in results if r['gpu']]
+        cpu_results = [r for r in results if not r['gpu']]
+
+        if gpu_results and cpu_results:
+            fastest_gpu = min(gpu_results, key=lambda x: x['time'])
+            fastest_cpu = min(cpu_results, key=lambda x: x['time'])
+            gpu_speedup = fastest_cpu['time'] / fastest_gpu['time']
+
+            print(f"\n📊 Analysis:")
+            print(f"Fastest GPU: {fastest_gpu['description']} ({fastest_gpu['time']:.1f}s)")
+            print(f"Fastest CPU: {fastest_cpu['description']} ({fastest_cpu['time']:.1f}s)")
+            print(f"GPU Speedup: {gpu_speedup:.1f}x faster")
+
+    def _find_best_quality_time_ratio(self, results):
+        """Find the configuration with the best quality/time trade-off"""
+        quality_scores = {'low': 1, 'medium': 2, 'high': 3}
+        best_ratio = 0
+        best_config = None
+
+        for result in results:
+            quality_score = quality_scores.get(result['quality'], 2)
+            ratio = quality_score / result['time']  # Higher is better
+
+            if ratio > best_ratio:
+                best_ratio = ratio
+                best_config = result
+
+        return best_config['description'] if best_config else "Unknown"
+
     def compress_multiple_videos(self, input_paths: List[str], output_dir: str, quality: str = "medium", use_gpu=False):
         """Batch compress multiple videos with progress tracking"""
+        import time
+        batch_start_time = time.time()
+
         output_dir = Path(output_dir)
         output_dir.mkdir(exist_ok=True)
 
@@ -632,17 +902,45 @@ class VideoCompressor:
             except Exception as e:
                 failed.append((str(input_path), str(e)))
 
-        # Show batch results
-        self._show_batch_results(successful, failed)
+        # Calculate and display batch timing
+        batch_end_time = time.time()
+        batch_elapsed_time = batch_end_time - batch_start_time
+
+        # Show batch results with timing
+        self._show_batch_results(successful, failed, batch_elapsed_time, use_gpu)
         return len(successful), len(failed)
 
-    def _show_batch_results(self, successful: List[str], failed: List[tuple]):
-        """Display batch processing results"""
+    def _show_batch_results(self, successful: List[str], failed: List[tuple], batch_elapsed_time=None, use_gpu=False):
+        """Display batch processing results with timing"""
         if RICH_AVAILABLE:
-            results_panel = Panel(
+            # Build results text with timing
+            results_text = (
                 f"✅ Successfully compressed: {len(successful)} videos\n" +
                 f"❌ Failed: {len(failed)} videos\n" +
-                f"🎯 Success rate: {len(successful)/(len(successful)+len(failed))*100:.1f}%",
+                f"🎯 Success rate: {len(successful)/(len(successful)+len(failed))*100:.1f}%"
+            )
+
+            # Add timing information if available
+            if batch_elapsed_time:
+                minutes = int(batch_elapsed_time // 60)
+                seconds = batch_elapsed_time % 60
+                time_str = f"{minutes}m {seconds:.1f}s" if minutes > 0 else f"{seconds:.1f}s"
+                encoding_type = "GPU" if use_gpu else "CPU"
+
+                # Calculate average time per file
+                total_files = len(successful) + len(failed)
+                if total_files > 0:
+                    avg_time_per_file = batch_elapsed_time / total_files
+                    avg_str = f"{avg_time_per_file:.1f}s" if avg_time_per_file < 60 else f"{int(avg_time_per_file // 60)}m {avg_time_per_file % 60:.1f}s"
+
+                    results_text += (
+                        f"\n⏱️ Total time: {time_str}\n" +
+                        f"🖥️ Encoding: {encoding_type}\n" +
+                        f"📈 Avg per file: {avg_str}"
+                    )
+
+            results_panel = Panel(
+                results_text,
                 title="📊 Batch Processing Results",
                 border_style="green" if len(failed) == 0 else "yellow"
             )
@@ -659,6 +957,24 @@ class VideoCompressor:
             print(f"\n📊 Batch Processing Results:")
             print(f"✅ Successfully compressed: {len(successful)} videos")
             print(f"❌ Failed: {len(failed)} videos")
+
+            # Add timing information if available
+            if batch_elapsed_time:
+                minutes = int(batch_elapsed_time // 60)
+                seconds = batch_elapsed_time % 60
+                time_str = f"{minutes}m {seconds:.1f}s" if minutes > 0 else f"{seconds:.1f}s"
+                encoding_type = "GPU" if use_gpu else "CPU"
+
+                print(f"⏱️ Total time: {time_str}")
+                print(f"🖥️ Encoding: {encoding_type}")
+
+                # Calculate average time per file
+                total_files = len(successful) + len(failed)
+                if total_files > 0:
+                    avg_time_per_file = batch_elapsed_time / total_files
+                    avg_str = f"{avg_time_per_file:.1f}s" if avg_time_per_file < 60 else f"{int(avg_time_per_file // 60)}m {avg_time_per_file % 60:.1f}s"
+                    print(f"📈 Avg per file: {avg_str}")
+
             if failed:
                 print(f"\n❌ Failed files:")
                 for file_path, error in failed:
@@ -692,6 +1008,9 @@ Examples:
 
   # Interactive mode
   python video_compressor.py --interactive
+
+  # Benchmark mode (compare CPU vs GPU performance)
+  python video_compressor.py input.mp4 --benchmark
         """
     )
 
@@ -703,6 +1022,7 @@ Examples:
     parser.add_argument('--interactive', action='store_true', help='Launch interactive mode')
     parser.add_argument('--no-banner', action='store_true', help='Skip the cool banner')
     parser.add_argument('--gpu', action='store_true', help='Enable GPU encoding (requires NVENC/VAAPI/VideoToolbox support)')
+    parser.add_argument('--benchmark', action='store_true', help='Run benchmark tests comparing CPU vs GPU and different quality settings')
 
     args = parser.parse_args()
 
@@ -729,6 +1049,25 @@ Examples:
         # Interactive mode
         if args.interactive:
             return run_interactive_mode(compressor)
+
+        # Benchmark mode
+        if args.benchmark:
+            if len(args.files) != 1:
+                if RICH_AVAILABLE:
+                    compressor.console.print("❌ Benchmark mode requires exactly one input file", style="bold red")
+                else:
+                    print("❌ Benchmark mode requires exactly one input file")
+                return 1
+
+            try:
+                compressor.run_benchmark(args.files[0])
+                return 0
+            except Exception as e:
+                if RICH_AVAILABLE:
+                    compressor.console.print(f"❌ Benchmark error: {e}", style="bold red")
+                else:
+                    print(f"❌ Benchmark error: {e}")
+                return 1
 
         # Parse quality argument - check if comma-separated or "all"
         if args.quality.lower().strip() == 'all':

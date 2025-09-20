@@ -14,6 +14,8 @@ A blazing-fast Python utility to compress videos for Discord sharing (25MB limit
 - **🎨 Beautiful UI**: Rich progress bars and detailed compression results
 - **🌐 Cross-Platform**: Works on Windows, macOS, and Linux
 - **⚡ Fast Processing**: Optimized encoding settings for speed
+- **⏱️ Performance Tracking**: Real-time timing for individual files and batch operations
+- **🏁 Benchmark Mode**: Compare CPU vs GPU performance across different quality settings
 
 ## 🔧 Requirements
 
@@ -80,6 +82,15 @@ python video_compressor.py *.mp4 --batch --quality high,medium --gpu
 python video_compressor.py --interactive
 ```
 
+### Benchmark Mode
+```bash
+# Test and compare CPU vs GPU performance
+python video_compressor.py input.mp4 --benchmark
+
+# Creates detailed performance comparison across 6 configurations:
+# CPU/GPU × High/Medium/Low quality settings
+```
+
 ## 🎛️ Quality Presets
 
 | Quality | Emoji | CRF | Max Bitrate | Description | Best For |
@@ -113,6 +124,7 @@ Options:
   --batch              Batch process multiple files
   --output-dir DIR     Output directory for batch processing
   --interactive        Launch interactive mode
+  --benchmark          Run performance benchmark tests
   --no-banner          Skip the cool ASCII banner
   --help               Show help message
 ```
@@ -129,6 +141,9 @@ python video_compressor.py movie.avi compressed.mp4 --quality high --gpu
 
 # Generate all quality versions
 python video_compressor.py presentation.mov --quality all
+
+# Performance benchmark
+python video_compressor.py test_video.mp4 --benchmark
 ```
 
 ### Batch Processing Examples
@@ -157,7 +172,47 @@ python video_compressor.py videos/*.mp4 --batch --output-dir discord_ready/
 └─────────────────────────────────────┘
 
 🎉 Perfect! File is ready for Discord sharing!
+
+┌─ ⚡ Performance ─┐
+│ ⏱️ Compression time: 2m 34.5s │
+│ 🖥️ Encoding: GPU               │
+│ 📁 File: video.mp4            │
+└───────────────────────────────┘
 ```
+
+## 🏁 Benchmark Mode
+
+The benchmark feature tests your system's performance across different encoding configurations:
+
+### Benchmark Results Example:
+```
+┌─ 🏆 Benchmark Results for test.mp4 ─┐
+│ Configuration │ Time     │ File Size │ Speed vs CPU │ Efficiency  │
+├───────────────────────────────────────────────────────────────────│
+│ CPU Medium    │ 2m 45.3s │ 22.1 MB   │ baseline     │ 0.13 MB/s   │
+│ GPU Medium    │ 28.7s    │ 22.3 MB   │ 5.8x faster │ 0.78 MB/s   │
+│ CPU High      │ 4m 12.1s │ 31.4 MB   │ 1.5x slower │ 0.12 MB/s   │
+│ GPU High      │ 43.2s    │ 31.6 MB   │ 3.8x faster │ 0.73 MB/s   │
+│ CPU Low       │ 1m 52.4s │ 15.7 MB   │ 1.5x faster │ 0.14 MB/s   │
+│ GPU Low       │ 19.8s    │ 15.9 MB   │ 8.3x faster │ 0.80 MB/s   │
+└───────────────────────────────────────────────────────────────────┘
+
+┌─ 📊 Performance Analysis ─┐
+│ 💡 Analysis:                │
+│ • Fastest GPU: GPU Low (19.8s)     │
+│ • Fastest CPU: CPU Low (1m 52.4s)  │
+│ • GPU Speedup: 5.7x faster than CPU │
+│ • Best quality/time ratio: GPU High │
+└─────────────────────────────────────┘
+```
+
+### Benchmark Features:
+- **🔄 6 Test Configurations**: CPU/GPU × High/Medium/Low quality
+- **⏱️ Precise Timing**: Accurate performance measurements
+- **📊 Speed Comparison**: Shows relative performance vs baseline
+- **⚡ Efficiency Rating**: MB processed per second
+- **🎯 Smart Analysis**: Recommends optimal settings
+- **📁 Test Files**: Creates sample outputs in `benchmark_results/` folder
 
 ## 🔧 How It Works
 
@@ -195,12 +250,34 @@ The compressor applies Discord-specific optimizations:
 - Lower quality settings (low/potato) are faster
 - Large 4K videos will take longer to process
 
+## ⏱️ Performance Tracking
+
+All compression operations include detailed timing information:
+
+### Individual File Timing:
+- **⏱️ Compression time**: Precise timing for each file
+- **🖥️ Encoder type**: Shows GPU or CPU encoding
+- **📁 File identification**: Clear file naming in results
+
+### Batch Operation Metrics:
+- **📊 Total processing time**: Complete batch duration
+- **📈 Average per file**: Mean processing time
+- **🎯 Success rate**: Percentage of successful compressions
+- **⚡ Throughput**: Files processed per minute
+
+### Performance Benefits:
+- **Compare GPU vs CPU**: See actual speed differences
+- **Optimize workflow**: Identify bottlenecks and optimal settings
+- **Track improvements**: Monitor performance over time
+- **Quality analysis**: Balance speed vs quality for your needs
+
 ## 🎨 Interactive Features
 
 - **📊 File size calculator**: Estimates compressed sizes for each quality
 - **🎮 Interactive menu**: Easy-to-use interface for beginners
 - **📋 Quality comparison**: See all quality options and their trade-offs
 - **🔍 Video analysis**: Detailed information about your input files
+- **🏁 Performance testing**: Built-in benchmark mode
 
 ## 📝 Output Files
 
