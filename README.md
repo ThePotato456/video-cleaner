@@ -1,4 +1,5 @@
 # 🎬 Ultra Cool Discord Video Compressor
+## Disclaimer: I wrote this entirely using claudecode. 
 
 A blazing-fast Python utility to compress videos for Discord sharing (25MB limit). Featuring GPU acceleration, multiple quality outputs, batch processing, and more!
 
