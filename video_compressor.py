@@ -6,6 +6,7 @@ Featuring: Progress bars, batch processing, ASCII art, and more!
 """
 
 import argparse
+import glob
 import json
 import os
 import re
@@ -138,7 +139,7 @@ class VideoCompressor:
         return None
 
     def _test_gpu_encoder(self, encoder):
-        """Test if a specific GPU encoder actually works"""
+        """Test if a specific GPU encoder actually works with realistic settings"""
         if RICH_AVAILABLE:
             self.console.print(f"🧪 Testing {encoder}...", style="cyan")
         else:
@@ -148,22 +149,48 @@ class VideoCompressor:
             # Use minimum size that works with all GPU encoders (NVENC needs at least 256x256)
             test_size = '256x256'
 
-            result = subprocess.run([
+            # Build test command with encoder-specific settings (similar to actual usage)
+            test_cmd = [
                 'ffmpeg', '-hide_banner', '-loglevel', 'error',
-                '-f', 'lavfi', '-i', f'testsrc=duration=0.1:size={test_size}:rate=1',
-                '-c:v', encoder, '-frames:v', '1', '-f', 'null', '-'
-            ], capture_output=True, timeout=15)
+                '-f', 'lavfi', '-i', f'testsrc=duration=0.2:size={test_size}:rate=30',
+                '-c:v', encoder
+            ]
+
+            # Add encoder-specific quality settings (matching compress_video logic)
+            if 'nvenc' in encoder:
+                test_cmd.extend(['-preset', 'p4', '-cq', '28'])
+            elif 'vaapi' in encoder:
+                test_cmd.extend(['-qp', '28'])
+            elif 'videotoolbox' in encoder:
+                test_cmd.extend(['-q:v', '22'])
+
+            # Add common settings
+            test_cmd.extend([
+                '-maxrate', '500k', '-bufsize', '1000k',
+                '-frames:v', '5', '-f', 'null', '-'
+            ])
+
+            result = subprocess.run(test_cmd, capture_output=True, timeout=20)
 
             if RICH_AVAILABLE:
                 self.console.print(f"📊 Test result: return code {result.returncode}", style="blue")
                 if result.stderr:
-                    self.console.print(f"📝 Error output: {result.stderr.decode()[:200]}", style="yellow")
+                    error_text = result.stderr.decode()[:300]
+                    self.console.print(f"📝 Error output: {error_text}", style="yellow")
+                    # Check for common GPU encoding failures
+                    if any(x in error_text.lower() for x in ['invalid argument', 'not supported', 'failed', 'cannot']):
+                        if RICH_AVAILABLE:
+                            self.console.print(f"🚫 {encoder} appears to have driver/hardware issues", style="red")
+                        else:
+                            print(f"🚫 {encoder} appears to have driver/hardware issues")
+                        return False
             else:
                 print(f"📊 Test result: return code {result.returncode}")
                 if result.stderr:
-                    print(f"📝 Error output: {result.stderr.decode()[:200]}")
+                    error_text = result.stderr.decode()[:300]
+                    print(f"📝 Error output: {error_text}")
 
-            # Return True if command succeeded or if it's just a warning about no output
+            # Return True only if command succeeded with no critical errors
             return result.returncode == 0
         except (subprocess.TimeoutExpired, FileNotFoundError) as e:
             if RICH_AVAILABLE:
@@ -368,6 +395,42 @@ class VideoCompressor:
 
         try:
             result = self._run_compression_with_progress(cmd, input_path, output_path, video_info)
+
+            # If GPU encoding failed and we were using GPU, try CPU fallback
+            if not result and use_gpu:
+                if RICH_AVAILABLE:
+                    self.console.print("⚠️ GPU encoding failed, attempting CPU fallback...", style="yellow")
+                else:
+                    print("⚠️ GPU encoding failed, attempting CPU fallback...")
+
+                # Rebuild command with CPU encoding
+                cpu_cmd = ['ffmpeg', '-i', str(input_path)]
+                cpu_cmd.extend([
+                    '-c:v', 'libx264',
+                    '-preset', settings['preset'],
+                    '-crf', settings['crf'],
+                    '-maxrate', settings['maxrate'],
+                    '-bufsize', settings['bufsize']
+                ])
+
+                # Add scaling if needed
+                if video_info:
+                    scale_filter = self.calculate_scale_filter(video_info['width'], video_info['height'])
+                    if scale_filter:
+                        cpu_cmd.extend(['-vf', scale_filter])
+
+                # Audio settings
+                cpu_cmd.extend([
+                    '-c:a', 'aac',
+                    '-b:a', '128k',
+                    '-movflags', '+faststart',
+                    '-y',
+                    str(output_path)
+                ])
+
+                # Try CPU encoding
+                result = self._run_compression_with_progress(cpu_cmd, input_path, output_path, video_info)
+                use_gpu = False  # Update flag for timing display
 
             # Calculate elapsed time
             end_time = time.time()
@@ -1070,6 +1133,29 @@ Examples:
                 else:
                     print(f"❌ Benchmark error: {e}")
                 return 1
+
+        # Expand glob patterns in file arguments
+        expanded_files = []
+        for file_pattern in args.files:
+            # Check if the pattern contains glob characters
+            if '*' in file_pattern or '?' in file_pattern or '[' in file_pattern:
+                matches = glob.glob(file_pattern)
+                if matches:
+                    expanded_files.extend(matches)
+                    if RICH_AVAILABLE:
+                        compressor.console.print(f"🔍 Expanded '{file_pattern}' to {len(matches)} files", style="cyan")
+                    else:
+                        print(f"🔍 Expanded '{file_pattern}' to {len(matches)} files")
+                else:
+                    if RICH_AVAILABLE:
+                        compressor.console.print(f"⚠️ No files matched pattern: {file_pattern}", style="yellow")
+                    else:
+                        print(f"⚠️ No files matched pattern: {file_pattern}")
+            else:
+                expanded_files.append(file_pattern)
+
+        # Update args.files with expanded list
+        args.files = expanded_files
 
         # Parse quality argument - check if comma-separated or "all"
         if args.quality.lower().strip() == 'all':
